@@ -8,21 +8,30 @@ app = Flask(__name__)
 def load_config():
     # Corrección: Deserialización segura de YAML
     config_file = request.args.get('file', 'config.yml')
-    with open(config_file, 'r') as f:
-        try:
+    try:
+        with open(config_file, 'r') as f:
             config = yaml.safe_load(f)  # Uso seguro de yaml.safe_load()
-        except yaml.YAMLError as e:
-            return jsonify({"error": "Error al cargar configuración"}), 400
-    return jsonify(config)
+        return jsonify(config)
+    except FileNotFoundError:
+        return jsonify({"error": "Archivo de configuración no encontrado"}), 404
+    except yaml.YAMLError as e:
+        return jsonify({"error": "Error al cargar configuración"}), 400
 
 @app.route('/execute')
 def execute_command():
     # Corrección: Ejecución de comandos del sistema
     cmd = request.args.get('cmd', 'echo "Hello"')
-    if cmd not in ["echo 'Hello'", "echo 'World'"]:  # Limitar comandos permitidos
+    allowed_commands = {
+        "echo 'Hello'": ["echo", "Hello"],
+        "echo 'World'": ["echo", "World"]
+    }
+    if cmd not in allowed_commands:
         return jsonify({"error": "Comando no permitido"}), 400
-    result = subprocess.run(cmd.split(), capture_output=True, text=True)
-    return jsonify({"output": result.stdout.strip()})
+    try:
+        result = subprocess.run(allowed_commands[cmd], capture_output=True, text=True, check=True)
+        return jsonify({"output": result.stdout.strip()})
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": "Error al ejecutar el comando"}), 500
 
 @app.route('/load_data')
 def load_data():
